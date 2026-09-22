@@ -6,6 +6,7 @@ import { MediaModule } from './modules/media/media.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
     ScheduleModule.forRoot(),
     UserModule,
     MediaModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,34 +1,37 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+// backend-web/src/modules/user/user.controller.ts
+
+import { Body, Controller, Get, Patch, Req, UseGuards } from '@nestjs/common';
+import type { AuthenticatedRequest } from '../auth/auth.types';
+import { SessionAuthGuard } from '../auth/session-auth.guard';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UserService } from './user.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
 
 @Controller('user')
+@UseGuards(SessionAuthGuard)
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  @Post()
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.userService.create(createUserDto);
-  }
+  @Get('me')
+  async me(
+    @Req()
+    request: AuthenticatedRequest,
+  ) {
+    const user = await this.userService.findById(request.auth.userId);
 
-  @Get()
-  findAll() {
-    return this.userService.findAll();
+    return this.userService.toPublicUser(user);
   }
+  @UseGuards(SessionAuthGuard)
+  @Patch('me')
+  async updateMe(
+    @Req()
+    request: AuthenticatedRequest,
+    @Body() dto: UpdateProfileDto,
+  ) {
+    const user = await this.userService.updateProfileOptimistic(
+      request.auth.userId,
+      dto,
+    );
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.userService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.userService.update(+id, updateUserDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.userService.remove(+id);
+    return this.userService.toPublicUser(user);
   }
 }

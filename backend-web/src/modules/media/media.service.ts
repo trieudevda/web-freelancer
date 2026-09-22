@@ -32,6 +32,7 @@ export class MediaService {
 
   async create(file: Express.Multer.File, dto: CreateMediaDto) {
     try {
+      this.validateFileSize(file);
       const relativePath = file.path
         .slice(this.mediaRoot.length)
         .replace(/^[/\\]+/, '')
@@ -54,7 +55,9 @@ export class MediaService {
 
       return await this.mediaRepository.save(media);
     } catch (error) {
-      await unlink(file.path).catch(() => undefined);
+      if (file?.path) {
+        await unlink(file.path).catch(() => undefined);
+      }
       throw error;
     }
   }
@@ -63,11 +66,10 @@ export class MediaService {
     if (!files?.length) {
       throw new BadRequestException('Vui lòng chọn ít nhất một ảnh hoặc video');
     }
-
     try {
+      files.map((v) => this.validateFileSize(v));
       const items = await this.dataSource.transaction(async (manager) => {
         const repository = manager.getRepository(Media);
-
         const mediaItems = files.map((file) =>
           repository.create({
             ...this.getFileData(file),
@@ -76,19 +78,15 @@ export class MediaService {
             status: MediaStatus.ACTIVE,
           }),
         );
-
         return repository.save(mediaItems);
       });
-
       return {
         message: 'Upload media thành công',
         total: items.length,
         items,
       };
     } catch (error) {
-      // Database lỗi thì xóa toàn bộ file đã upload
       await Promise.allSettled(files.map((file) => unlink(file.path)));
-
       throw error;
     }
   }
@@ -118,7 +116,6 @@ export class MediaService {
 
         const now = new Date();
 
-        // Lưu thông tin file cũ vào thùng rác
         const oldMedia = repository.create({
           originalName: currentMedia.originalName,
           fileName: currentMedia.fileName,
@@ -337,5 +334,17 @@ export class MediaService {
         : MediaType.VIDEO,
       size: file.size,
     };
+  }
+  private validateFileSize(file: Express.Multer.File) {
+    const maxImageSize = 10 * 1024 * 1024;
+    const maxVideoSize = 1024 * 1024 * 1024;
+
+    if (file.mimetype.startsWith('image/') && file.size > maxImageSize) {
+      throw new BadRequestException('Ảnh không được vượt quá 10 MB');
+    }
+
+    if (file.mimetype.startsWith('video/') && file.size > maxVideoSize) {
+      throw new BadRequestException('Video không được vượt quá 1 GB');
+    }
   }
 }

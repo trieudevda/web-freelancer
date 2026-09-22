@@ -1,4 +1,3 @@
-// src/media/media-storage.config.ts
 import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MulterModuleOptions } from '@nestjs/platform-express';
@@ -62,7 +61,7 @@ export function createMediaMulterOptions(
 
   return {
     limits: {
-      fileSize: Number(config.get('MEDIA_MAX_FILE_SIZE', 500 * 1024 * 1024)),
+      fileSize: Number(config.get('MEDIA_MAX_VIDEO_SIZE', 1024 * 1024 * 1024)),
     },
 
     fileFilter: (_request, file, callback) => {
