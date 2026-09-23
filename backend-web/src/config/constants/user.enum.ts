@@ -1,4 +1,4 @@
-import { USER_STATUS } from './user/user-status';
+import { USER_STATUS } from './user/user-status.js';
 
 export const USER = {
   ROLE: {

@@ -7,7 +7,11 @@ import {
   UpdateDateColumn,
   VersionColumn,
 } from 'typeorm';
-import { USER_STATUS } from '../../../config/constants/user/user-status';
+import { USER_STATUS } from '../../../config/constants/user/user-status.js';
+import {
+  USER_ROLE,
+  type UserRole,
+} from '../../../config/constants/user/user-role.constants.js';
 
 @Entity('user')
 export class User {
@@ -57,6 +61,13 @@ export class User {
     type: 'int',
   })
   version: number;
+
+  @Column({
+    type: 'enum',
+    enum: Object.values(USER_ROLE),
+    default: USER_ROLE.USER,
+  })
+  role: UserRole;
 
   @Column({
     type: 'enum',

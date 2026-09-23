@@ -1,7 +1,7 @@
 // src/media/media-cleanup.service.ts
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
-import { MediaService } from './media.service';
+import { Cron } from '@nestjs/schedule';
+import { MediaService } from './media.service.js';
 
 @Injectable()
 export class MediaCleanupService {

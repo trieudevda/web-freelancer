@@ -61,6 +61,9 @@ export function createMediaMulterOptions(
 
   return {
     limits: {
+      files: 5,
+    fields: 5,
+    parts: 10,
       fileSize: Number(config.get('MEDIA_MAX_VIDEO_SIZE', 1024 * 1024 * 1024)),
     },
 

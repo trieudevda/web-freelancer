@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -10,20 +9,20 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
 import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
-import { USER_STATUS } from '../../config/constants/user/user-status';
-import { User } from '../user/entities/user.entity';
-import { UserService } from '../user/user.service';
+import { USER_STATUS } from '../../config/constants/user/user-status.js';
+import { User } from '../user/entities/user.entity.js';
+import { UserService } from '../user/user.service.js';
 import {
   createSessionToken,
   parseSessionToken,
   tokenHashMatches,
-} from './auth-token.util';
-import { AuthContext, ClientDeviceInfo } from './auth.types';
-import { ChangePasswordDto } from './dto/change-password.dto';
-import { LoginDto } from './dto/login.dto';
-import { RegisterDto } from './dto/register.dto';
-import { AuthSession } from './entities/auth-session.entity';
-import { hashPassword, verifyPassword } from './password.util';
+} from './auth-token.util.js';
+import { AuthContext, ClientDeviceInfo } from './auth.types.js';
+import { ChangePasswordDto } from './dto/change-password.dto.js';
+import { LoginDto } from './dto/login.dto.js';
+import { RegisterDto } from './dto/register.dto.js';
+import { AuthSession } from './entities/auth-session.entity.js';
+import { hashPassword, verifyPassword } from './password.util.js';
 
 @Injectable()
 export class AuthService {

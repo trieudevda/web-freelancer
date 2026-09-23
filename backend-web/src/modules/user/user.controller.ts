@@ -1,10 +1,10 @@
 // backend-web/src/modules/user/user.controller.ts
 
 import { Body, Controller, Get, Patch, Req, UseGuards } from '@nestjs/common';
-import type { AuthenticatedRequest } from '../auth/auth.types';
-import { SessionAuthGuard } from '../auth/session-auth.guard';
-import { UpdateProfileDto } from './dto/update-profile.dto';
-import { UserService } from './user.service';
+import type { AuthenticatedRequest } from '../auth/auth.types.js';
+import { SessionAuthGuard } from '../auth/session-auth.guard.js';
+import { UpdateProfileDto } from './dto/update-profile.dto.js';
+import { UserService } from './user.service.js';
 
 @Controller('user')
 @UseGuards(SessionAuthGuard)

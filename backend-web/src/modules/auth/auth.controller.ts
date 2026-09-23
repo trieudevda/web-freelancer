@@ -14,16 +14,18 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { randomUUID } from 'node:crypto';
 import type { Request, Response } from 'express';
-import { AuthService } from './auth.service';
-import { AuthCookieService } from './auth-cookie.service';
-import { AUTH_COOKIE } from './auth-cookie.constants';
-import { ChangePasswordDto } from './dto/change-password.dto';
-import { LoginDto } from './dto/login.dto';
-import { RegisterDto } from './dto/register.dto';
-import type { AuthenticatedRequest, ClientDeviceInfo } from './auth.types';
-import { SessionAuthGuard } from './session-auth.guard';
+import { AuthService } from './auth.service.js';
+import { AuthCookieService } from './auth-cookie.service.js';
+import { AUTH_COOKIE } from './auth-cookie.constants.js';
+import { readRequestCookie } from './auth-cookie.util.js';
+import { ChangePasswordDto } from './dto/change-password.dto.js';
+import { LoginDto } from './dto/login.dto.js';
+import { RegisterDto } from './dto/register.dto.js';
+import type { AuthenticatedRequest, ClientDeviceInfo } from './auth.types.js';
+import { SessionAuthGuard } from './session-auth.guard.js';
 
 @Controller('auth')
 export class AuthController {
@@ -34,6 +36,7 @@ export class AuthController {
   ) {}
 
   @Post('register')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async register(
     @Body()
     dto: RegisterDto,
@@ -64,6 +67,7 @@ export class AuthController {
 
   @HttpCode(HttpStatus.OK)
   @Post('login')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async login(
     @Body()
     dto: LoginDto,
@@ -94,6 +98,7 @@ export class AuthController {
 
   @HttpCode(HttpStatus.OK)
   @Post('refresh')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async refresh(
     @Req()
     request: Request,
@@ -103,8 +108,7 @@ export class AuthController {
     })
     response: Response,
   ) {
-
-    const refreshToken = request.cookies?.[AUTH_COOKIE.REFRESH_TOKEN];
+    const refreshToken = readRequestCookie(request, AUTH_COOKIE.REFRESH_TOKEN);
 
     if (!refreshToken) {
       throw new UnauthorizedException('Thiếu refresh token');
@@ -209,9 +213,9 @@ export class AuthController {
     request: Request,
     response: Response,
   ): ClientDeviceInfo {
-    let deviceId = request.signedCookies?.[AUTH_COOKIE.DEVICE_ID];
+    let deviceId = readRequestCookie(request, AUTH_COOKIE.DEVICE_ID, true);
 
-    if (!deviceId || typeof deviceId !== 'string') {
+    if (!deviceId) {
       deviceId = randomUUID();
 
       this.cookieService.setDeviceId(response, deviceId);

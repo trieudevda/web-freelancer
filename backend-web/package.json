@@ -4,6 +4,7 @@
   "description": "",
   "author": "",
   "private": true,
+  "type": "module",
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
@@ -13,26 +14,43 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:cov": "jest --coverage",
-    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "lint:check": "eslint \"{src,apps,libs,test}/**/*.ts\"",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:unit:ci": "node --experimental-vm-modules node_modules/jest/bin/jest.js --ci --runInBand",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "test:cov": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "test:debug": "node --experimental-vm-modules --inspect-brk node_modules/jest/bin/jest.js --runInBand",
+    "test:e2e": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config ./test/jest-e2e.json",
+    "test:e2e:ci": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config ./test/jest-e2e.json --ci --runInBand",
+    "test:all": "npm run lint:check && npm run build && npm run test:unit:ci && npm run test:e2e:ci && npm audit --omit=dev",
+    "typeorm": "typeorm-ts-node-esm -d src/database/data-source.ts",
+    "migration:create": "npm run typeorm -- migration:create",
+    "migration:generate": "npm run typeorm -- migration:generate",
+    "migration:run": "npm run typeorm -- migration:run",
+    "migration:revert": "npm run typeorm -- migration:revert",
+    "migration:show": "npm run typeorm -- migration:show"
   },
   "dependencies": {
-    "@nestjs/common": "^11.0.1",
+    "@nestjs/common": "12.0.4",
     "@nestjs/config": "^12.0.0",
-    "@nestjs/core": "^11.0.1",
+    "@nestjs/core": "12.0.4",
     "@nestjs/jwt": "^12.0.2",
-    "@nestjs/mapped-types": "*",
-    "@nestjs/platform-express": "^11.2.5",
+    "@nestjs/mapped-types": "12.0.0",
+    "@nestjs/platform-express": "12.0.4",
     "@nestjs/schedule": "^12.0.2",
+    "@nestjs/swagger": "12.0.1",
+    "@nestjs/throttler": "^6.7.0",
     "@nestjs/typeorm": "^12.0.1",
+    "@nestjs-redis/client": "2.0.1",
+    "@nestjs-redis/throttler-storage": "2.0.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "cookie-parser": "^1.4.7",
-    "multer": "^2.4.0",
+    "dotenv": "^18.0.3",
+    "helmet": "^8.3.0",
+    "multer": "2.4.0",
     "mysql2": "^3.24.4",
+    "redis": "6.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "typeorm": "^1.1.1"
@@ -40,9 +58,9 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^9.18.0",
-    "@nestjs/cli": "^11.0.0",
-    "@nestjs/schematics": "^11.0.0",
-    "@nestjs/testing": "^11.0.1",
+    "@nestjs/cli": "12.0.5",
+    "@nestjs/schematics": "12.0.4",
+    "@nestjs/testing": "12.0.4",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
@@ -57,11 +75,11 @@
     "prettier": "^3.4.2",
     "source-map-support": "^0.5.21",
     "supertest": "^7.0.0",
-    "ts-jest": "^29.2.5",
-    "ts-loader": "^9.5.2",
+    "ts-jest": "29.4.12",
+    "ts-loader": "9.5.4",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.7.3",
+    "typescript": "6.0.2",
     "typescript-eslint": "^8.20.0"
   },
   "jest": {
@@ -73,7 +91,19 @@
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
+      "^.+\\.ts$": [
+        "ts-jest",
+        {
+          "useESM": true,
+          "tsconfig": "tsconfig.json"
+        }
+      ]
+    },
+    "extensionsToTreatAsEsm": [
+      ".ts"
+    ],
+    "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"

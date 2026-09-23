@@ -25,16 +25,20 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MulterModule } from '@nestjs/platform-express';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Media } from './entities/media.entity';
-import { MediaCleanupService } from './media-cleanup.service';
-import { MediaController } from './media.controller';
-import { MediaService } from './media.service';
-import { createMediaMulterOptions } from './media-storage.config';
+import { Media } from './entities/media.entity.js';
+import { MediaCleanupService } from './media-cleanup.service.js';
+import { MediaController } from './media.controller.js';
+import { MediaService } from './media.service.js';
+import { createMediaMulterOptions } from './media-storage.config.js';
+import { SessionAuthModule } from '../auth/session-auth.module.js';
+import { MediaFileValidationService } from './media-file-validation.service.js';
+import { MediaPathService } from './media-path.service.js';
 
 @Module({
   imports: [
     ConfigModule,
     TypeOrmModule.forFeature([Media]),
+    SessionAuthModule,
     MulterModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -42,7 +46,12 @@ import { createMediaMulterOptions } from './media-storage.config';
     }),
   ],
   controllers: [MediaController],
-  providers: [MediaService, MediaCleanupService],
+  providers: [
+    MediaService,
+    MediaCleanupService,
+    MediaFileValidationService,
+    MediaPathService,
+  ],
   exports: [MediaService],
 })
 export class MediaModule {}

@@ -7,9 +7,10 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { AUTH_COOKIE } from './auth-cookie.constants';
-import { AuthenticatedRequest } from './auth.types';
-import { SessionAuthService } from './session-auth.service';
+import { AUTH_COOKIE } from './auth-cookie.constants.js';
+import { readRequestCookie } from './auth-cookie.util.js';
+import { AuthenticatedRequest } from './auth.types.js';
+import { SessionAuthService } from './session-auth.service.js';
 
 @Injectable()
 export class SessionAuthGuard implements CanActivate {
@@ -18,9 +19,9 @@ export class SessionAuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
 
-    const accessToken = request.cookies?.[AUTH_COOKIE.ACCESS_TOKEN];
+    const accessToken = readRequestCookie(request, AUTH_COOKIE.ACCESS_TOKEN);
 
-    if (!accessToken || typeof accessToken !== 'string') {
+    if (!accessToken) {
       throw new UnauthorizedException('Chưa đăng nhập');
     }
 

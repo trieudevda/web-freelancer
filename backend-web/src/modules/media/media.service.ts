@@ -5,39 +5,32 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { unlink } from 'fs/promises';
-import { resolve, sep } from 'path';
 import { DataSource, LessThanOrEqual, Repository } from 'typeorm';
-import { CreateMediaDto } from './dto/create-media.dto';
-import { SearchMediaDto } from './dto/search-media.dto';
-import { UpdateMediaDto } from './dto/update-media.dto';
-import { Media, MediaStatus, MediaType } from './entities/media.entity';
+import { CreateMediaDto } from './dto/create-media.dto.js';
+import { SearchMediaDto } from './dto/search-media.dto.js';
+import { UpdateMediaDto } from './dto/update-media.dto.js';
+import { Media, MediaStatus, MediaType } from './entities/media.entity.js';
+import { MediaFileValidationService } from './media-file-validation.service.js';
+import { MediaPathService } from './media-path.service.js';
 
 const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class MediaService {
-  private readonly mediaRoot: string;
-
   constructor(
     @InjectRepository(Media)
     private readonly mediaRepository: Repository<Media>,
     private readonly dataSource: DataSource,
-    config: ConfigService,
-  ) {
-    this.mediaRoot = resolve(config.get<string>('MEDIA_ROOT', 'storage/media'));
-  }
+    private readonly fileValidation: MediaFileValidationService,
+    private readonly mediaPath: MediaPathService,
+  ) {}
 
   async create(file: Express.Multer.File, dto: CreateMediaDto) {
     try {
-      this.validateFileSize(file);
-      const relativePath = file.path
-        .slice(this.mediaRoot.length)
-        .replace(/^[/\\]+/, '')
-        .split(sep)
-        .join('/');
+      await this.fileValidation.validate(file);
+      const relativePath = this.mediaPath.relativeFromAbsolute(file.path);
 
       const media = this.mediaRepository.create({
         originalName: file.originalname,
@@ -67,7 +60,9 @@ export class MediaService {
       throw new BadRequestException('Vui lòng chọn ít nhất một ảnh hoặc video');
     }
     try {
-      files.map((v) => this.validateFileSize(v));
+      await Promise.all(
+        files.map((file) => this.fileValidation.validate(file)),
+      );
       const items = await this.dataSource.transaction(async (manager) => {
         const repository = manager.getRepository(Media);
         const mediaItems = files.map((file) =>
@@ -97,6 +92,8 @@ export class MediaService {
     }
 
     try {
+      await this.fileValidation.validate(newFile);
+
       return await this.dataSource.transaction(async (manager) => {
         const repository = manager.getRepository(Media);
 
@@ -156,7 +153,9 @@ export class MediaService {
       throw error;
     }
   }
-
+  escapeLike(value: string): string {
+    return value.replace(/[!%_]/g, '!$&');
+  }
   async search(query: SearchMediaDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
@@ -172,7 +171,7 @@ export class MediaService {
         type: query.type,
       });
     }
-
+    const keyword =  query.q ? `%${this.escapeLike(query.q.trim().toLowerCase())}%` : null;
     if (query.q?.trim()) {
       builder.andWhere(
         `(
@@ -181,7 +180,7 @@ export class MediaService {
           OR LOWER(COALESCE(media.altText, '')) LIKE :keyword
         )`,
         {
-          keyword: `%${query.q.trim().toLowerCase()}%`,
+          keyword: keyword,
         },
       );
     }
@@ -267,15 +266,9 @@ export class MediaService {
 
   async getContentPath(id: string) {
     const media = await this.findActive(id);
-    const absolutePath = resolve(this.mediaRoot, media.relativePath);
-
-    // Chống đọc file nằm ngoài MEDIA_ROOT.
-    if (
-      absolutePath !== this.mediaRoot &&
-      !absolutePath.startsWith(`${this.mediaRoot}${sep}`)
-    ) {
-      throw new NotFoundException('Đường dẫn file không hợp lệ');
-    }
+    const absolutePath = await this.mediaPath.resolveForRead(
+      media.relativePath,
+    );
 
     return { media, absolutePath };
   }
@@ -291,12 +284,14 @@ export class MediaService {
     let deleted = 0;
     let failed = 0;
     for (const media of expired) {
-      const absolutePath = resolve(this.mediaRoot, media.relativePath);
-
       try {
+        const absolutePath = this.mediaPath.resolveForDelete(
+          media.relativePath,
+        );
+
         await unlink(absolutePath).catch((error) => {
           // File không còn tồn tại vẫn được xem là xóa thành công.
-          if (error.code !== 'ENOENT') {
+          if (!this.isMissingFileError(error)) {
             throw error;
           }
         });
@@ -315,19 +310,11 @@ export class MediaService {
       failed,
     };
   }
-  private getRelativePath(filePath: string) {
-    return filePath
-      .slice(this.mediaRoot.length)
-      .replace(/^[/\\]+/, '')
-      .split(sep)
-      .join('/');
-  }
-
   private getFileData(file: Express.Multer.File) {
     return {
       originalName: file.originalname,
       fileName: file.filename,
-      relativePath: this.getRelativePath(file.path),
+      relativePath: this.mediaPath.relativeFromAbsolute(file.path),
       mimeType: file.mimetype,
       mediaType: file.mimetype.startsWith('image/')
         ? MediaType.IMAGE
@@ -335,16 +322,7 @@ export class MediaService {
       size: file.size,
     };
   }
-  private validateFileSize(file: Express.Multer.File) {
-    const maxImageSize = 10 * 1024 * 1024;
-    const maxVideoSize = 1024 * 1024 * 1024;
-
-    if (file.mimetype.startsWith('image/') && file.size > maxImageSize) {
-      throw new BadRequestException('Ảnh không được vượt quá 10 MB');
-    }
-
-    if (file.mimetype.startsWith('video/') && file.size > maxVideoSize) {
-      throw new BadRequestException('Video không được vượt quá 1 GB');
-    }
+  private isMissingFileError(error: unknown): boolean {
+    return error instanceof Error && 'code' in error && error.code === 'ENOENT';
   }
 }

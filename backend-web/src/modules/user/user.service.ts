@@ -5,9 +5,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
-import { USER_STATUS } from '../../config/constants/user/user-status';
-import { UpdateProfileDto } from './dto/update-profile.dto';
-import { User } from './entities/user.entity';
+import { USER_STATUS } from '../../config/constants/user/user-status.js';
+import { UpdateProfileDto } from './dto/update-profile.dto.js';
+import { User } from './entities/user.entity.js';
+import { USER_ROLE } from '../../config/constants/user/user-role.constants.js';
 
 export interface CreateAuthUserInput {
   firstname: string;
@@ -56,6 +57,7 @@ export class UserService {
       password: input.passwordHash,
       status: USER_STATUS.ACTIVE,
       authVersion: 1,
+      role: USER_ROLE.USER,
     });
 
     try {
@@ -183,6 +185,7 @@ export class UserService {
       email: user.email,
       address: user.address,
       status: user.status,
+      role: user.role,
       version: user.version,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,

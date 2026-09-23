@@ -2,4 +2,5 @@ export const AUTH_COOKIE = {
   ACCESS_TOKEN: 'access_token',
   REFRESH_TOKEN: 'refresh_token',
   DEVICE_ID: 'device_id',
+  CSRF_TOKEN: 'csrf_token',
 } as const;

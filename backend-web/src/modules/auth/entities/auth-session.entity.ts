@@ -8,7 +8,7 @@ import {
   PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { User } from '../../user/entities/user.entity';
+import { User } from '../../user/entities/user.entity.js';
 
 @Entity('auth_sessions')
 @Index('IDX_auth_session_user_revoked', ['userId', 'revokedAt'])

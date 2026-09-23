@@ -1,10 +1,10 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { USER_STATUS } from '../../config/constants/user/user-status';
-import { parseSessionToken, tokenHashMatches } from './auth-token.util';
-import { AuthContext } from './auth.types';
-import { AuthSession } from './entities/auth-session.entity';
+import { USER_STATUS } from '../../config/constants/user/user-status.js';
+import { parseSessionToken, tokenHashMatches } from './auth-token.util.js';
+import { AuthContext } from './auth.types.js';
+import { AuthSession } from './entities/auth-session.entity.js';
 
 @Injectable()
 export class SessionAuthService {
@@ -63,6 +63,7 @@ export class SessionAuthService {
       userId: session.userId,
       sessionId: session.id,
       authVersion: session.authVersion,
+      role: session.user.role,
     };
   }
 }
