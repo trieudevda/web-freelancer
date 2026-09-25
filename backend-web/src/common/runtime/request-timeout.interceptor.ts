@@ -23,6 +23,13 @@ export class RequestTimeoutInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest<Request>();
     const response = context.switchToHttp().getResponse<Response>();
 
+    // A Promise-backed database mutation cannot be cancelled by RxJS timeout.
+    // Returning 408 while it continues could make a client retry a write that
+    // later commits, so only time out safe/idempotent reads here.
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method.toUpperCase())) {
+      return next.handle();
+    }
+
     return next.handle().pipe(
       timeout(this.timeoutMs),
       catchError((error: unknown) => {

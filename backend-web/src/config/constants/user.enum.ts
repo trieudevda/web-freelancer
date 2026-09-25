@@ -4,8 +4,9 @@ export const USER = {
   ROLE: {
     SUPERADMIN: 'superadmin',
     ADMIN: 'admin',
+    EDITOR: 'editor',
+    SALES: 'sales',
     USER: 'user',
-    GUEST: 'guest',
   },
   PERMISSION: {
     USER: {

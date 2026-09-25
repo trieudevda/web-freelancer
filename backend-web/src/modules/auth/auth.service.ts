@@ -24,6 +24,11 @@ import { RegisterDto } from './dto/register.dto.js';
 import { AuthSession } from './entities/auth-session.entity.js';
 import { hashPassword, verifyPassword } from './password.util.js';
 
+// Keep unknown-email attempts on the same expensive verification path as an
+// incorrect password for an existing account to reduce timing enumeration.
+const DUMMY_PASSWORD_HASH =
+  'scrypt-v1$00000000000000000000000000000000$190c3f2c0f08ffa112c32865a2497802ef3d661a994840cfd1b6a129c9f548b33ed7298bccfe30f7192ce6a0b35ac0f6be8fc217233d99f7dfa7be6c468623f4';
+
 @Injectable()
 export class AuthService {
   private readonly accessTtlMs: number;
@@ -76,9 +81,16 @@ export class AuthService {
   }
 
   async login(dto: LoginDto, device: ClientDeviceInfo) {
-    const user = await this.validateCredentials(dto.email, dto.password);
-
     return this.dataSource.transaction(async (manager) => {
+      // Password validation and session creation share the same user-row lock.
+      // This prevents a concurrent password change/logout-all from allowing a
+      // session authenticated with stale credentials.
+      const user = await this.validateCredentials(
+        dto.email,
+        dto.password,
+        manager,
+      );
+
       return this.createLoginSession(
         user,
         {
@@ -89,10 +101,17 @@ export class AuthService {
     });
   }
 
-  async validateCredentials(email: string, password: string): Promise<User> {
-    const user = await this.userService.findByEmailWithPassword(email);
+  async validateCredentials(
+    email: string,
+    password: string,
+    manager?: EntityManager,
+  ): Promise<User> {
+    const user = manager
+      ? await this.userService.findByEmailWithPasswordForUpdate(email, manager)
+      : await this.userService.findByEmailWithPassword(email);
 
     if (!user) {
+      await verifyPassword(password, DUMMY_PASSWORD_HASH);
       throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
     }
 
@@ -360,6 +379,14 @@ export class AuthService {
     manager: EntityManager,
   ) {
     const repository = manager.getRepository(AuthSession);
+    const lockedUser = await manager.getRepository(User).findOne({
+      where: { id: user.id },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (!lockedUser || lockedUser.status !== USER_STATUS.ACTIVE) {
+      throw new UnauthorizedException('Tài khoản không còn hoạt động');
+    }
 
     const now = new Date();
 
@@ -375,7 +402,7 @@ export class AuthService {
         revokedReason: 'replaced_by_login',
       })
       .where('user_id = :userId', {
-        userId: user.id,
+        userId: lockedUser.id,
       })
       .andWhere('device_id = :deviceId', {
         deviceId,
@@ -389,8 +416,8 @@ export class AuthService {
 
     const session = repository.create({
       id: sessionId,
-      userId: user.id,
-      authVersion: user.authVersion,
+      userId: lockedUser.id,
+      authVersion: lockedUser.authVersion,
       deviceId,
       deviceName: device.deviceName?.trim().slice(0, 255) ?? null,
       userAgent: device.userAgent?.slice(0, 1000) ?? null,
@@ -407,7 +434,7 @@ export class AuthService {
     await repository.save(session);
 
     return {
-      user: this.userService.toPublicUser(user),
+      user: this.userService.toPublicUser(lockedUser),
       session: {
         id: session.id,
         deviceId: session.deviceId,

@@ -16,13 +16,16 @@ export function configureApplication(
   const cookieSecret = config.getOrThrow<string>('COOKIE_SECRET');
   const apiPrefix = config.getOrThrow<string>('API_PREFIX');
   const trustedProxyCidrs = config
-  .get<string>('TRUSTED_PROXY_CIDRS', '')
-  .split(',')
-  .map((value) => value.trim())
-  .filter(Boolean);
+    .get<string>('TRUSTED_PROXY_CIDRS', '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
 
   app.setGlobalPrefix(apiPrefix);
-  app.set('trust proxy', trustedProxyCidrs.length > 0 ? trustedProxyCidrs : false);
+  app.set(
+    'trust proxy',
+    trustedProxyCidrs.length > 0 ? trustedProxyCidrs : false,
+  );
 
   const requestLifecycle = new RequestLifecycleTracker({
     maxConcurrentRequests: config.get<number>('MAX_CONCURRENT_REQUESTS', 200),

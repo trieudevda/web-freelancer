@@ -50,7 +50,7 @@ describe('RolesGuard', () => {
     },
   );
 
-  it.each([USER_ROLE.USER, USER_ROLE.GUEST, undefined])(
+  it.each([USER_ROLE.USER, USER_ROLE.EDITOR, USER_ROLE.SALES, undefined])(
     'rejects unauthorized role %s',
     (role) => {
       const reflector = {

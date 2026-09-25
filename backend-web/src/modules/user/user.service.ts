@@ -80,10 +80,26 @@ export class UserService {
     return repository
       .createQueryBuilder('user')
       .addSelect('user.password')
-      .where('LOWER(user.email) = :email', {
+      .where('user.email = :email', {
         email: email.trim().toLowerCase(),
       })
       .andWhere('user.deletedAt IS NULL')
+      .getOne();
+  }
+
+  async findByEmailWithPasswordForUpdate(
+    email: string,
+    manager: EntityManager,
+  ): Promise<User | null> {
+    return manager
+      .getRepository(User)
+      .createQueryBuilder('user')
+      .addSelect('user.password')
+      .where('user.email = :email', {
+        email: email.trim().toLowerCase(),
+      })
+      .andWhere('user.deletedAt IS NULL')
+      .setLock('pessimistic_write')
       .getOne();
   }
 

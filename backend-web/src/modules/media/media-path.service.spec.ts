@@ -39,9 +39,9 @@ describe('MediaPathService', () => {
     await expect(
       service.resolveForRead('../outside.jpg'),
     ).rejects.toBeInstanceOf(NotFoundException);
-    expect(() => service.resolveForDelete('../outside.jpg')).toThrow(
-      NotFoundException,
-    );
+    await expect(
+      service.resolveForDelete('../outside.jpg'),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('rejects uploaded file paths outside media root', () => {

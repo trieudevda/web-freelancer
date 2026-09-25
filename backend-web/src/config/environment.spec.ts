@@ -55,6 +55,41 @@ describe('validateEnvironment', () => {
     ).toBe('http://localhost:3000,https://shop.example.com');
   });
 
+  it('canonicalizes and deduplicates CORS origins', () => {
+    expect(
+      validateEnvironment({
+        ...validConfig,
+        CORS_ORIGINS: 'http://LOCALHOST:3000/,http://localhost:3000',
+      }).CORS_ORIGINS,
+    ).toBe('http://localhost:3000');
+  });
+
+  it.each([
+    'https://example.com/path',
+    'https://example.com?redirect=x',
+    'https://user:pass@example.com',
+  ])('rejects a CORS URL that is not an origin: %s', (origin) => {
+    expect(() =>
+      validateEnvironment({ ...validConfig, CORS_ORIGINS: origin }),
+    ).toThrow('Invalid CORS origin');
+  });
+
+  it('validates trusted IPv4 and IPv6 proxy CIDRs', () => {
+    expect(
+      validateEnvironment({
+        ...validConfig,
+        TRUSTED_PROXY_CIDRS: '10.0.0.0/8, 2001:db8::/32',
+      }).TRUSTED_PROXY_CIDRS,
+    ).toBe('10.0.0.0/8,2001:db8::/32');
+
+    expect(() =>
+      validateEnvironment({
+        ...validConfig,
+        TRUSTED_PROXY_CIDRS: '10.0.0.0/99',
+      }),
+    ).toThrow('trusted proxy CIDR');
+  });
+
   it.each(['redis://localhost:6379', 'rediss://cache.example.com:6380'])(
     'accepts supported Redis URL %s',
     (url) => {
@@ -132,6 +167,18 @@ describe('validateEnvironment', () => {
         COOKIE_SECRET: 'short-secret',
       }),
     ).toThrow('COOKIE_SECRET');
+  });
+
+  it('requires access sessions to expire before refresh sessions', () => {
+    expect(() =>
+      validateEnvironment({
+        ...validConfig,
+        AUTH_ACCESS_TTL_SECONDS: '300',
+        AUTH_REFRESH_TTL_SECONDS: '300',
+      }),
+    ).toThrow(
+      'AUTH_ACCESS_TTL_SECONDS must be less than AUTH_REFRESH_TTL_SECONDS',
+    );
   });
 
   it.each(['1', 'yes', 'FALSE'])(

@@ -15,6 +15,15 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import {
+  ApiCookieAuth,
+  ApiCreatedResponse,
+  ApiForbiddenResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
 import { randomUUID } from 'node:crypto';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service.js';
@@ -27,6 +36,7 @@ import { RegisterDto } from './dto/register.dto.js';
 import type { AuthenticatedRequest, ClientDeviceInfo } from './auth.types.js';
 import { SessionAuthGuard } from './session-auth.guard.js';
 
+@ApiTags('authentication')
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -36,6 +46,9 @@ export class AuthController {
   ) {}
 
   @Post('register')
+  @ApiOperation({ summary: 'Register a user and create a login session' })
+  @ApiCreatedResponse({ description: 'User and session created' })
+  @ApiForbiddenResponse({ description: 'Origin is not allowed' })
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async register(
     @Body()
@@ -57,6 +70,7 @@ export class AuthController {
       response,
       result.tokens.accessToken,
       result.tokens.refreshToken,
+      result.tokens,
     );
 
     return {
@@ -67,6 +81,9 @@ export class AuthController {
 
   @HttpCode(HttpStatus.OK)
   @Post('login')
+  @ApiOperation({ summary: 'Log in with email and password' })
+  @ApiOkResponse({ description: 'Credentials accepted and cookies set' })
+  @ApiUnauthorizedResponse({ description: 'Invalid credentials' })
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async login(
     @Body()
@@ -88,6 +105,7 @@ export class AuthController {
       response,
       result.tokens.accessToken,
       result.tokens.refreshToken,
+      result.tokens,
     );
 
     return {
@@ -98,6 +116,11 @@ export class AuthController {
 
   @HttpCode(HttpStatus.OK)
   @Post('refresh')
+  @ApiOperation({ summary: 'Rotate access and refresh tokens' })
+  @ApiOkResponse({ description: 'Session tokens rotated' })
+  @ApiUnauthorizedResponse({
+    description: 'Refresh token is invalid or expired',
+  })
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async refresh(
     @Req()
@@ -120,6 +143,7 @@ export class AuthController {
       response,
       result.tokens.accessToken,
       result.tokens.refreshToken,
+      result.tokens,
     );
 
     return {
@@ -131,6 +155,8 @@ export class AuthController {
   @UseGuards(SessionAuthGuard)
   @HttpCode(HttpStatus.OK)
   @Post('logout')
+  @ApiCookieAuth('access-token')
+  @ApiOperation({ summary: 'Revoke the current session' })
   async logout(
     @Req()
     request: AuthenticatedRequest,
@@ -150,6 +176,8 @@ export class AuthController {
   @UseGuards(SessionAuthGuard)
   @HttpCode(HttpStatus.OK)
   @Post('logout-all')
+  @ApiCookieAuth('access-token')
+  @ApiOperation({ summary: 'Revoke every session for the current user' })
   async logoutAll(
     @Req()
     request: AuthenticatedRequest,
@@ -168,6 +196,8 @@ export class AuthController {
 
   @UseGuards(SessionAuthGuard)
   @Patch('password')
+  @ApiCookieAuth('access-token')
+  @ApiOperation({ summary: 'Change password and revoke all sessions' })
   async changePassword(
     @Req()
     request: AuthenticatedRequest,
@@ -190,6 +220,8 @@ export class AuthController {
 
   @UseGuards(SessionAuthGuard)
   @Get('sessions')
+  @ApiCookieAuth('access-token')
+  @ApiOperation({ summary: 'List active sessions for the current user' })
   sessions(
     @Req()
     request: AuthenticatedRequest,
@@ -199,6 +231,8 @@ export class AuthController {
 
   @UseGuards(SessionAuthGuard)
   @Delete('sessions/:id')
+  @ApiCookieAuth('access-token')
+  @ApiOperation({ summary: 'Revoke one session owned by the current user' })
   revokeSession(
     @Req()
     request: AuthenticatedRequest,

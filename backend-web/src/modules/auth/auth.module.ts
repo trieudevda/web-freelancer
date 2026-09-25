@@ -6,6 +6,7 @@ import { AuthCookieService } from './auth-cookie.service.js';
 import { AuthService } from './auth.service.js';
 import { AuthSession } from './entities/auth-session.entity.js';
 import { SessionAuthModule } from './session-auth.module.js';
+import { AuthSessionCleanupService } from './auth-session-cleanup.service.js';
 
 @Module({
   imports: [
@@ -18,6 +19,6 @@ import { SessionAuthModule } from './session-auth.module.js';
 
   controllers: [AuthController],
 
-  providers: [AuthService, AuthCookieService],
+  providers: [AuthService, AuthCookieService, AuthSessionCleanupService],
 })
 export class AuthModule {}

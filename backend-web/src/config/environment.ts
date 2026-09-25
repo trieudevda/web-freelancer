@@ -1,3 +1,5 @@
+import { isIP } from 'node:net';
+
 export type NodeEnvironment = 'development' | 'test' | 'production';
 
 export interface EnvironmentVariables {
@@ -6,6 +8,7 @@ export interface EnvironmentVariables {
   API_PREFIX: string;
   CORS_ORIGINS: string;
   LOG_DIRECTORY: string;
+  TRUSTED_PROXY_CIDRS: string;
 
   DB_HOST: string;
   DB_PORT: number;
@@ -36,6 +39,9 @@ export interface EnvironmentVariables {
 
   AUTH_ACCESS_TTL_SECONDS: number;
   AUTH_REFRESH_TTL_SECONDS: number;
+  AUTH_SESSION_RETENTION_DAYS: number;
+  BOOTSTRAP_SUPERADMIN_EMAIL?: string;
+  BOOTSTRAP_SUPERADMIN_PASSWORD?: string;
 
   MEDIA_ROOT: string;
   MEDIA_TIMEZONE: string;
@@ -83,12 +89,13 @@ function integer(
   key: string,
   fallback: number,
   minimum: number,
+  maximum = Number.MAX_SAFE_INTEGER,
 ): number {
   const value = Number(config[key] ?? fallback);
 
-  if (!Number.isInteger(value) || value < minimum) {
+  if (!Number.isInteger(value) || value < minimum || value > maximum) {
     throw new Error(
-      `Environment variable ${key} must be an integer >= ${minimum}`,
+      `Environment variable ${key} must be an integer between ${minimum} and ${maximum}`,
     );
   }
 
@@ -141,15 +148,50 @@ function corsOrigins(config: Record<string, unknown>): string {
     throw new Error('CORS_ORIGINS must contain at least one origin');
   }
 
-  for (const origin of origins) {
+  const normalizedOrigins = origins.map((origin) => {
     const url = new URL(origin);
 
-    if (!['http:', 'https:'].includes(url.protocol)) {
+    if (
+      !['http:', 'https:'].includes(url.protocol) ||
+      url.username ||
+      url.password ||
+      url.pathname !== '/' ||
+      url.search ||
+      url.hash
+    ) {
       throw new Error(`Invalid CORS origin: ${origin}`);
+    }
+
+    return url.origin;
+  });
+
+  return [...new Set(normalizedOrigins)].join(',');
+}
+
+function trustedProxyCidrs(config: Record<string, unknown>): string {
+  const values = optionalString(config, 'TRUSTED_PROXY_CIDRS')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  for (const value of values) {
+    const [address, prefix, extra] = value.split('/');
+    const version = isIP(address);
+    const maximumPrefix = version === 4 ? 32 : 128;
+    const numericPrefix = prefix === undefined ? maximumPrefix : Number(prefix);
+
+    if (
+      extra !== undefined ||
+      version === 0 ||
+      !Number.isInteger(numericPrefix) ||
+      numericPrefix < 0 ||
+      numericPrefix > maximumPrefix
+    ) {
+      throw new Error(`Invalid trusted proxy CIDR: ${value}`);
     }
   }
 
-  return origins.join(',');
+  return values.join(',');
 }
 
 function redisUrl(config: Record<string, unknown>): string {
@@ -161,6 +203,63 @@ function redisUrl(config: Record<string, unknown>): string {
   }
 
   return value;
+}
+
+function timeZone(config: Record<string, unknown>): string {
+  const value = requiredString(config, 'MEDIA_TIMEZONE');
+
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value }).format();
+  } catch {
+    throw new Error('MEDIA_TIMEZONE must be a valid IANA time zone');
+  }
+
+  return value;
+}
+
+function bootstrapSuperadmin(config: Record<string, unknown>) {
+  const email = optionalString(
+    config,
+    'BOOTSTRAP_SUPERADMIN_EMAIL',
+  ).toLowerCase();
+  const rawPassword = config.BOOTSTRAP_SUPERADMIN_PASSWORD;
+  const password =
+    typeof rawPassword === 'string'
+      ? rawPassword
+      : rawPassword == null
+        ? ''
+        : null;
+
+  if (password === null) {
+    throw new Error(
+      'Environment variable BOOTSTRAP_SUPERADMIN_PASSWORD must be a string',
+    );
+  }
+
+  if (!email && !password) {
+    return {};
+  }
+
+  if (!email || !password) {
+    throw new Error(
+      'BOOTSTRAP_SUPERADMIN_EMAIL and BOOTSTRAP_SUPERADMIN_PASSWORD must be provided together',
+    );
+  }
+
+  if (email.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error('BOOTSTRAP_SUPERADMIN_EMAIL must be a valid email');
+  }
+
+  if (password.length < 12 || password.length > 128) {
+    throw new Error(
+      'BOOTSTRAP_SUPERADMIN_PASSWORD must contain between 12 and 128 characters',
+    );
+  }
+
+  return {
+    BOOTSTRAP_SUPERADMIN_EMAIL: email,
+    BOOTSTRAP_SUPERADMIN_PASSWORD: password,
+  };
 }
 
 export function validateEnvironment(
@@ -192,15 +291,32 @@ export function validateEnvironment(
     throw new Error('DB_SYNCHRONIZE cannot be enabled in production');
   }
 
+  const accessTtlSeconds = integer(config, 'AUTH_ACCESS_TTL_SECONDS', 900, 60);
+  const refreshTtlSeconds = integer(
+    config,
+    'AUTH_REFRESH_TTL_SECONDS',
+    2_592_000,
+    300,
+  );
+
+  if (accessTtlSeconds >= refreshTtlSeconds) {
+    throw new Error(
+      'AUTH_ACCESS_TTL_SECONDS must be less than AUTH_REFRESH_TTL_SECONDS',
+    );
+  }
+
+  const bootstrapAdmin = bootstrapSuperadmin(config);
+
   return {
     NODE_ENV: nodeEnvironment,
-    PORT: integer(config, 'PORT', 3001, 1),
+    PORT: integer(config, 'PORT', 3001, 1, 65_535),
     API_PREFIX: apiPrefix(config),
     CORS_ORIGINS: corsOrigins(config),
     LOG_DIRECTORY: optionalString(config, 'LOG_DIRECTORY', 'logs'),
+    TRUSTED_PROXY_CIDRS: trustedProxyCidrs(config),
 
     DB_HOST: requiredString(config, 'DB_HOST'),
-    DB_PORT: integer(config, 'DB_PORT', 3306, 1),
+    DB_PORT: integer(config, 'DB_PORT', 3306, 1, 65_535),
     DB_USERNAME: requiredString(config, 'DB_USERNAME'),
     DB_PASSWORD: optionalString(config, 'DB_PASSWORD'),
     DB_DATABASE: requiredString(config, 'DB_DATABASE'),
@@ -261,21 +377,18 @@ export function validateEnvironment(
     COOKIE_SECRET: cookieSecret,
     COOKIE_DOMAIN: optionalString(config, 'COOKIE_DOMAIN'),
 
-    AUTH_ACCESS_TTL_SECONDS: integer(
+    AUTH_ACCESS_TTL_SECONDS: accessTtlSeconds,
+    AUTH_REFRESH_TTL_SECONDS: refreshTtlSeconds,
+    AUTH_SESSION_RETENTION_DAYS: integer(
       config,
-      'AUTH_ACCESS_TTL_SECONDS',
-      900,
-      60,
+      'AUTH_SESSION_RETENTION_DAYS',
+      30,
+      1,
     ),
-    AUTH_REFRESH_TTL_SECONDS: integer(
-      config,
-      'AUTH_REFRESH_TTL_SECONDS',
-      2_592_000,
-      300,
-    ),
+    ...bootstrapAdmin,
 
     MEDIA_ROOT: requiredString(config, 'MEDIA_ROOT'),
-    MEDIA_TIMEZONE: requiredString(config, 'MEDIA_TIMEZONE'),
+    MEDIA_TIMEZONE: timeZone(config),
     MEDIA_MAX_IMAGE_SIZE: integer(
       config,
       'MEDIA_MAX_IMAGE_SIZE',

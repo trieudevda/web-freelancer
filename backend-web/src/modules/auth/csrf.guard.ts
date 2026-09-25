@@ -57,12 +57,10 @@ export class CsrfGuard implements CanActivate {
 
   private assertTrustedOrigin(request: Request): void {
     const origin = this.getRequestOrigin(request);
-    const currentOrigin = `${request.protocol}://${request.get('host') ?? ''}`;
 
-    if (
-      !origin ||
-      (!this.allowedOrigins.has(origin) && origin !== currentOrigin)
-    ) {
+    // Never derive trust from Host: it is client-controlled and becomes a CSRF
+    // bypass when cookies are shared across subdomains.
+    if (!origin || !this.allowedOrigins.has(origin)) {
       throw new ForbiddenException('Nguồn request không được phép');
     }
   }

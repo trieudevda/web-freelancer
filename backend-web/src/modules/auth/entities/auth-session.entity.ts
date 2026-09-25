@@ -13,6 +13,8 @@ import { User } from '../../user/entities/user.entity.js';
 @Entity('auth_sessions')
 @Index('IDX_auth_session_user_revoked', ['userId', 'revokedAt'])
 @Index('IDX_auth_session_user_device', ['userId', 'deviceId'])
+@Index('IDX_auth_session_refresh_expiry', ['refreshExpiresAt'])
+@Index('IDX_auth_session_revoked_at', ['revokedAt'])
 export class AuthSession {
   @PrimaryColumn({
     type: 'char',

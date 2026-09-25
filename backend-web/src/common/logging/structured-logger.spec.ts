@@ -35,6 +35,33 @@ describe('structured logger redaction', () => {
     });
   });
 
+  it('preserves network details and nested AggregateError causes', () => {
+    const connectionError = Object.assign(new Error('connect ECONNREFUSED'), {
+      code: 'ECONNREFUSED',
+      errno: -4078,
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379,
+    });
+    const aggregate = new AggregateError(
+      [connectionError],
+      'Redis unavailable',
+    );
+
+    expect(normalizeValue(aggregate)).toMatchObject({
+      name: 'AggregateError',
+      message: 'Redis unavailable',
+      errors: [
+        {
+          code: 'ECONNREFUSED',
+          syscall: 'connect',
+          address: '127.0.0.1',
+          port: 6379,
+        },
+      ],
+    });
+  });
+
   it('redacts credentials embedded inside log strings', () => {
     expect(
       normalizeValue(

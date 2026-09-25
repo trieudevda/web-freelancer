@@ -44,16 +44,28 @@ export class AuthCookieService {
     });
   }
 
-  setAuthTokens(response: Response, accessToken: string, refreshToken: string) {
+  setAuthTokens(
+    response: Response,
+    accessToken: string,
+    refreshToken: string,
+    expires?: { accessExpiresAt: Date; refreshExpiresAt: Date },
+  ) {
+    const accessMaxAge = expires
+      ? Math.max(0, expires.accessExpiresAt.getTime() - Date.now())
+      : this.accessTtlMs;
+    const refreshMaxAge = expires
+      ? Math.max(0, expires.refreshExpiresAt.getTime() - Date.now())
+      : this.refreshTtlMs;
+
     response.cookie(AUTH_COOKIE.ACCESS_TOKEN, accessToken, {
       ...this.baseOptions(),
-      maxAge: this.accessTtlMs,
+      maxAge: accessMaxAge,
       path: this.apiPath,
     });
 
     response.cookie(AUTH_COOKIE.REFRESH_TOKEN, refreshToken, {
       ...this.baseOptions(),
-      maxAge: this.refreshTtlMs,
+      maxAge: refreshMaxAge,
       path: this.refreshPath,
     });
 
@@ -63,7 +75,7 @@ export class AuthCookieService {
       {
         ...this.baseOptions(),
         httpOnly: false,
-        maxAge: this.refreshTtlMs,
+        maxAge: refreshMaxAge,
         path: '/',
       },
     );
