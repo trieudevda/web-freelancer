@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { type INestApplication, type LogLevel } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';

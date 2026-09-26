@@ -1,3 +1,12 @@
 npm run migration:generate -- src/database/migrations/add-user-role --pretty
 npm run migration:run
 npm run migration:revert
+
+docker volume create web-freelancer-redis-data
+docker run -d `
+  --name web-freelancer-redis `
+  --restart unless-stopped `
+  -p 127.0.0.1:6379:6379 `
+  -v web-freelancer-redis-data:/data `
+  redis:7.4-alpine `
+  redis-server --appendonly yes

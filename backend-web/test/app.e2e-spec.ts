@@ -6,6 +6,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
+import { RedisToken } from '@nestjs-redis/client';
 import { AppController } from '../src/app.controller.js';
 import { AppService } from '../src/app.service.js';
 import { configureApplication } from '../src/bootstrap.js';
@@ -132,6 +133,10 @@ const dataSource = {
   query: jest.fn(async () => [{ result: 1 }]),
 };
 
+const redis = {
+  ping: jest.fn(async () => 'PONG'),
+};
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -168,6 +173,7 @@ const dataSource = {
     { provide: MediaService, useValue: mediaService },
     { provide: SessionAuthService, useValue: sessionAuthService },
     { provide: DataSource, useValue: dataSource },
+    { provide: RedisToken(), useValue: redis },
     { provide: APP_FILTER, useClass: ApiExceptionFilter },
     { provide: APP_GUARD, useClass: CsrfGuard },
     { provide: APP_INTERCEPTOR, useClass: ApiResponseInterceptor },
@@ -189,7 +195,7 @@ describe('Application HTTP integration/e2e', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    await app?.close();
   });
 
   beforeEach(() => {
@@ -439,27 +445,32 @@ describe('Application HTTP integration/e2e', () => {
       expect(mediaService.restore).not.toHaveBeenCalled();
     });
 
-    it.each([
-      ['admin-token', USER_ROLE.ADMIN],
-      ['superadmin-token', USER_ROLE.SUPERADMIN],
-    ])('allows %s to upload valid multipart media', async (token) => {
-      const response = await privilegedRequest('post', `${API}/media`, token)
-        .field('title', 'Product')
-        .attach('file', Buffer.from([0xff, 0xd8, 0xff, 0xd9]), {
-          filename: 'product.jpg',
-          contentType: 'image/jpeg',
-        })
-        .expect(201);
+    it.each(['admin-token', 'superadmin-token'])(
+      'allows %s to upload valid multipart media',
+      async (token) => {
+        const jpeg = Buffer.concat([
+          Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+          Buffer.alloc(28),
+          Buffer.from([0xff, 0xd9]),
+        ]);
+        const response = await privilegedRequest('post', `${API}/media`, token)
+          .field('title', 'Product')
+          .attach('file', jpeg, {
+            filename: 'product.jpg',
+            contentType: 'image/jpeg',
+          })
+          .expect(201);
 
-      expect(response.body.data).toEqual(mediaItem);
-      expect(mediaService.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          originalname: 'product.jpg',
-          mimetype: 'image/jpeg',
-        }),
-        expect.objectContaining({ title: 'Product' }),
-      );
-    });
+        expect(response.body.data).toEqual(mediaItem);
+        expect(mediaService.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            originalname: 'product.jpg',
+            mimetype: 'image/jpeg',
+          }),
+          expect.objectContaining({ title: 'Product' }),
+        );
+      },
+    );
   });
 
   describe('protected Swagger', () => {

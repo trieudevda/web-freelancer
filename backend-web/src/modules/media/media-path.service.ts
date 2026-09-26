@@ -5,7 +5,14 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { realpath } from 'node:fs/promises';
-import { isAbsolute, relative, resolve, sep } from 'node:path';
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  relative,
+  resolve,
+  sep,
+} from 'node:path';
 
 @Injectable()
 export class MediaPathService {
@@ -52,8 +59,37 @@ export class MediaPathService {
     }
   }
 
-  resolveForDelete(relativePath: string): string {
-    return this.resolveStoredPath(relativePath);
+  async resolveForDelete(relativePath: string): Promise<string> {
+    const absolutePath = this.resolveStoredPath(relativePath);
+
+    try {
+      const [realRoot, realParent] = await Promise.all([
+        realpath(this.mediaRoot),
+        realpath(dirname(absolutePath)),
+      ]);
+
+      if (
+        realParent !== realRoot &&
+        !realParent.startsWith(`${realRoot}${sep}`)
+      ) {
+        throw new NotFoundException('Đường dẫn media không hợp lệ');
+      }
+
+      return resolve(realParent, basename(absolutePath));
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      // A missing parent means the physical file cannot exist. Returning the
+      // already validated lexical path lets unlink report ENOENT, which cleanup
+      // intentionally treats as success.
+      if (this.isMissingPathError(error)) {
+        return absolutePath;
+      }
+
+      throw new NotFoundException('Đường dẫn media không hợp lệ');
+    }
   }
 
   private resolveStoredPath(relativePath: string): string {
@@ -82,5 +118,14 @@ export class MediaPathService {
     ) {
       throw new ExceptionType('Đường dẫn media không hợp lệ');
     }
+  }
+
+  private isMissingPathError(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'ENOENT'
+    );
   }
 }

@@ -29,14 +29,37 @@ import { RolesGuard } from '../auth/roles.guard.js';
 import { Roles } from '../auth/roles.decorator.js';
 import { USER_ROLE } from '../../config/constants/user/user-role.constants.js';
 import { Throttle } from '@nestjs/throttler';
+import {
+  ApiBody,
+  ApiConsumes,
+  ApiCookieAuth,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 
 @Controller('media')
 @UseGuards(SessionAuthGuard, RolesGuard)
+@Roles(USER_ROLE.SUPERADMIN, USER_ROLE.ADMIN, USER_ROLE.EDITOR)
+@ApiTags('media')
+@ApiCookieAuth('access-token')
 export class MediaController {
   constructor(private readonly mediaService: MediaService) {}
 
   @Post()
-  @Roles(USER_ROLE.ADMIN, USER_ROLE.SUPERADMIN)
+  @ApiOperation({ summary: 'Upload one image or video (admin)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        title: { type: 'string', maxLength: 255 },
+        altText: { type: 'string', maxLength: 500 },
+      },
+    },
+  })
+  @Roles(USER_ROLE.ADMIN, USER_ROLE.SUPERADMIN, USER_ROLE.EDITOR)
   @UseInterceptors(FileInterceptor('file'))
   create(
     @UploadedFile() file: Express.Multer.File,
@@ -47,7 +70,22 @@ export class MediaController {
 
   // Upload tối đa 20 ảnh/video cùng lúc
   @Post('bulk')
-  @Roles(USER_ROLE.ADMIN, USER_ROLE.SUPERADMIN)
+  @ApiOperation({ summary: 'Upload up to twenty media files (admin)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['files'],
+      properties: {
+        files: {
+          type: 'array',
+          maxItems: 20,
+          items: { type: 'string', format: 'binary' },
+        },
+      },
+    },
+  })
+  @Roles(USER_ROLE.ADMIN, USER_ROLE.SUPERADMIN, USER_ROLE.EDITOR)
   @Throttle({ default: { limit: 2, ttl: 60_000 } })
   @UseInterceptors(FilesInterceptor('files', 20))
   createMany(@UploadedFiles() files: Express.Multer.File[]) {
@@ -56,7 +94,16 @@ export class MediaController {
 
   // Thay ảnh/video cũ bằng file mới
   @Put(':id/file')
-  @Roles(USER_ROLE.ADMIN, USER_ROLE.SUPERADMIN)
+  @ApiOperation({ summary: 'Replace a media file and retain the old file' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @Roles(USER_ROLE.ADMIN, USER_ROLE.SUPERADMIN, USER_ROLE.EDITOR)
   @UseInterceptors(FileInterceptor('file'))
   replaceFile(
     @Param('id', ParseUUIDPipe) id: string,
@@ -66,16 +113,19 @@ export class MediaController {
   }
 
   @Get()
+  @ApiOperation({ summary: 'Search the media library' })
   search(@Query() query: SearchMediaDto) {
     return this.mediaService.search(query);
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'Get active media metadata' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.mediaService.findActive(id);
   }
 
   @Get(':id/content')
+  @ApiOperation({ summary: 'Stream active media content' })
   async content(
     @Param('id', ParseUUIDPipe) id: string,
     @Res({ passthrough: true }) response: Response,
@@ -92,19 +142,22 @@ export class MediaController {
   }
 
   @Patch(':id')
-  @Roles(USER_ROLE.ADMIN, USER_ROLE.SUPERADMIN)
+  @ApiOperation({ summary: 'Update media title and alternative text' })
+  @Roles(USER_ROLE.ADMIN, USER_ROLE.SUPERADMIN, USER_ROLE.EDITOR)
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateMediaDto) {
     return this.mediaService.update(id, dto);
   }
 
   @Delete(':id')
-  @Roles(USER_ROLE.ADMIN, USER_ROLE.SUPERADMIN)
+  @ApiOperation({ summary: 'Move media to the seven-day trash' })
+  @Roles(USER_ROLE.ADMIN, USER_ROLE.SUPERADMIN, USER_ROLE.EDITOR)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.mediaService.requestDelete(id);
   }
 
   @Post(':id/restore')
-  @Roles(USER_ROLE.ADMIN, USER_ROLE.SUPERADMIN)
+  @ApiOperation({ summary: 'Restore media before its deletion deadline' })
+  @Roles(USER_ROLE.ADMIN, USER_ROLE.SUPERADMIN, USER_ROLE.EDITOR)
   restore(@Param('id', ParseUUIDPipe) id: string) {
     return this.mediaService.restore(id);
   }

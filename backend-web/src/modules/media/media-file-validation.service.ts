@@ -1,10 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { open } from 'node:fs/promises';
+import { open, stat } from 'node:fs/promises';
 import { extname } from 'node:path';
 import { MediaType } from './entities/media.entity.js';
 
-interface DetectedMediaFile {
+export interface DetectedMediaFile {
   mimeType: string;
   mediaType: MediaType;
   extensions: string[];
@@ -40,12 +40,21 @@ export class MediaFileValidationService {
       throw new BadRequestException('Vui lòng chọn file cần tải lên');
     }
 
-    const header = await this.readHeader(file.path);
+    const { header, tail, size } = await this.readSamples(file.path);
     const detected = this.detect(header);
 
     if (!detected) {
       throw new BadRequestException(
         'Nội dung file không phải ảnh hoặc video hợp lệ',
+      );
+    }
+
+    if (
+      size !== file.size ||
+      !this.isStructurallyPlausible(detected, header, tail, size)
+    ) {
+      throw new BadRequestException(
+        'Nội dung file ảnh hoặc video không hoàn chỉnh',
       );
     }
 
@@ -81,16 +90,81 @@ export class MediaFileValidationService {
     return detected;
   }
 
-  private async readHeader(filePath: string): Promise<Buffer> {
+  private async readSamples(
+    filePath: string,
+  ): Promise<{ header: Buffer; tail: Buffer; size: number }> {
     const handle = await open(filePath, 'r');
 
     try {
-      const buffer = Buffer.alloc(64);
-      const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+      const { size } = await stat(filePath);
+      const headerBuffer = Buffer.alloc(64);
+      const headerRead = await handle.read(
+        headerBuffer,
+        0,
+        headerBuffer.length,
+        0,
+      );
+      const tailLength = Math.min(32, size);
+      const tailBuffer = Buffer.alloc(tailLength);
+      const tailRead = await handle.read(
+        tailBuffer,
+        0,
+        tailLength,
+        Math.max(0, size - tailLength),
+      );
 
-      return buffer.subarray(0, bytesRead);
+      return {
+        header: headerBuffer.subarray(0, headerRead.bytesRead),
+        tail: tailBuffer.subarray(0, tailRead.bytesRead),
+        size,
+      };
     } finally {
       await handle.close();
+    }
+  }
+
+  private isStructurallyPlausible(
+    detected: DetectedMediaFile,
+    header: Buffer,
+    tail: Buffer,
+    size: number,
+  ): boolean {
+    switch (detected.mimeType) {
+      case 'image/jpeg':
+        return (
+          size >= 32 &&
+          tail.length >= 2 &&
+          tail[tail.length - 2] === 0xff &&
+          tail[tail.length - 1] === 0xd9
+        );
+      case 'image/png':
+        return (
+          size >= 45 &&
+          header.toString('ascii', 12, 16) === 'IHDR' &&
+          tail.includes(Buffer.from('IEND'))
+        );
+      case 'image/gif':
+        return size >= 14 && tail[tail.length - 1] === 0x3b;
+      case 'image/webp':
+        return (
+          size >= 20 &&
+          header.length >= 12 &&
+          header.readUInt32LE(4) + 8 === size
+        );
+      case 'image/avif':
+      case 'video/mp4':
+      case 'video/quicktime': {
+        if (size < 16 || header.length < 12) {
+          return false;
+        }
+
+        const boxSize = header.readUInt32BE(0);
+        return boxSize >= 16 && boxSize <= size;
+      }
+      case 'video/webm':
+        return size >= 8;
+      default:
+        return false;
     }
   }
 

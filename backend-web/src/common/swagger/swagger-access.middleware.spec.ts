@@ -1,6 +1,7 @@
 import { jest } from '@jest/globals';
 import type { NextFunction, Request, Response } from 'express';
 import { USER_ROLE } from '../../config/constants/user/user-role.constants.js';
+import type { UserRole } from '../../config/constants/user/user-role.constants.js';
 import type { SessionAuthService } from '../../modules/auth/session-auth.service.js';
 import {
   createSwaggerAccessMiddleware,
@@ -49,7 +50,7 @@ describe('Swagger access middleware', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it.each([USER_ROLE.USER, USER_ROLE.GUEST])(
+  it.each([USER_ROLE.USER, USER_ROLE.EDITOR, USER_ROLE.SALES])(
     'returns 403 for authenticated role %s',
     async (role) => {
       const { middleware, response, next } = createFixture(
@@ -105,7 +106,7 @@ describe('Swagger access middleware', () => {
 function createFixture(
   originalUrl: string,
   token?: string,
-  role = USER_ROLE.ADMIN,
+  role: UserRole = USER_ROLE.ADMIN,
 ) {
   const validate = jest.fn(async () => ({
     userId: 1,

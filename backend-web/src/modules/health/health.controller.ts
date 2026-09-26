@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiOkResponse,
+  ApiOperation,
   ApiServiceUnavailableResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -27,6 +28,7 @@ export class HealthController {
   ) {}
 
   @Get()
+  @ApiOperation({ summary: 'Check application and database health' })
   @ApiOkResponse({
     description: 'Application and database are available',
   })
@@ -52,8 +54,19 @@ export class HealthController {
     }
   }
   @Get('ready')
+  @ApiOperation({ summary: 'Check database and Redis readiness' })
+  @ApiOkResponse({ description: 'Application dependencies are ready' })
+  @ApiServiceUnavailableResponse({ description: 'A dependency is unavailable' })
   async readiness() {
-    await Promise.all([this.dataSource.query('SELECT 1'), this.redis.ping()]);
+    try {
+      await Promise.all([this.dataSource.query('SELECT 1'), this.redis.ping()]);
+    } catch (error) {
+      this.logger.error(
+        'Readiness check failed',
+        error instanceof Error ? error.stack : undefined,
+      );
+      throw new ServiceUnavailableException('Application is not ready');
+    }
 
     return {
       status: 'ok',
@@ -63,6 +76,7 @@ export class HealthController {
   }
 
   @Get('live')
+  @ApiOperation({ summary: 'Check process liveness' })
   @SkipThrottle()
   liveness() {
     return { status: 'ok' };

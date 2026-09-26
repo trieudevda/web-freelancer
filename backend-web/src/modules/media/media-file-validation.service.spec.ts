@@ -48,7 +48,11 @@ describe('MediaFileValidationService', () => {
     const file = await createFile(
       'photo.jpg',
       'image/jpeg',
-      Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+      Buffer.concat([
+        Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+        Buffer.alloc(28),
+        Buffer.from([0xff, 0xd9]),
+      ]),
     );
 
     await expect(service.validate(file)).resolves.toEqual({
@@ -74,7 +78,11 @@ describe('MediaFileValidationService', () => {
     const file = await createFile(
       'photo.png',
       'image/jpeg',
-      Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+      Buffer.concat([
+        Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+        Buffer.alloc(28),
+        Buffer.from([0xff, 0xd9]),
+      ]),
     );
 
     await expect(service.validate(file)).rejects.toBeInstanceOf(

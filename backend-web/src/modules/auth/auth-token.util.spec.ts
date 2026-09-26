@@ -42,15 +42,22 @@ describe('auth-token.util', () => {
       `${sessionId}.`,
       `not-a-uuid.secret`,
       `${sessionId}.secret.with.extra.separator`,
+      `${sessionId}.too-short`,
+      `${sessionId}.${'a'.repeat(65)}`,
+      `${sessionId}.${'*'.repeat(43)}`,
     ])('should reject malformed token %j', (token) => {
       expect(parseSessionToken(token)).toBeNull();
     });
 
-    it('should accept a valid UUID session id and a non-empty secret', () => {
-      expect(parseSessionToken(`${sessionId}.secret-value`)).toEqual({
+    it('should accept generated access and refresh secret lengths', () => {
+      const access = createSessionToken(sessionId, 32);
+      const refresh = createSessionToken(sessionId, 48);
+
+      expect(parseSessionToken(access.token)).toEqual({
         sessionId,
-        secret: 'secret-value',
+        secret: access.token.split('.')[1],
       });
+      expect(parseSessionToken(refresh.token)?.sessionId).toBe(sessionId);
     });
   });
 

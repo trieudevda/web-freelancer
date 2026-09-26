@@ -130,11 +130,36 @@ export function normalizeValue(
   seen = new WeakSet<object>(),
 ): unknown {
   if (value instanceof Error) {
-    return {
+    const normalized: Record<string, unknown> = {
       name: value.name,
-      message: value.message,
-      stack: value.stack,
+      message: redactString(value.message),
+      stack: value.stack ? redactString(value.stack) : undefined,
     };
+
+    for (const key of [
+      'code',
+      'errno',
+      'syscall',
+      'address',
+      'port',
+    ] as const) {
+      if (key in value) {
+        normalized[key] = normalizeValue(
+          (value as unknown as Record<string, unknown>)[key],
+          seen,
+        );
+      }
+    }
+
+    if ('cause' in value && value.cause !== undefined) {
+      normalized.cause = normalizeValue(value.cause, seen);
+    }
+
+    if (value instanceof AggregateError) {
+      normalized.errors = normalizeValue(value.errors, seen);
+    }
+
+    return normalized;
   }
 
   if (Array.isArray(value)) {

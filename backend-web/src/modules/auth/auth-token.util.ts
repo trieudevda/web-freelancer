@@ -2,6 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 const SESSION_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SESSION_SECRET_PATTERN = /^(?:[A-Za-z0-9_-]{43}|[A-Za-z0-9_-]{64})$/;
 
 export interface ParsedSessionToken {
   sessionId: string;
@@ -35,7 +36,10 @@ export function parseSessionToken(token: string): ParsedSessionToken | null {
   const sessionId = token.slice(0, separator);
   const secret = token.slice(separator + 1);
 
-  if (!SESSION_ID_PATTERN.test(sessionId) || secret.includes('.')) {
+  if (
+    !SESSION_ID_PATTERN.test(sessionId) ||
+    !SESSION_SECRET_PATTERN.test(secret)
+  ) {
     return null;
   }
 
